@@ -86,7 +86,7 @@ export default function ItineraryResults({ itinerary, formData, onReset }) {
           const addSection = (label, items_data) => {
             if (!items_data) return
             const rows = Array.isArray(items_data)
-              ? items_data.map(p => ({ stack: [{ text: p.place, bold: true, fontSize: 10 }, { text: p.description || '', fontSize: 9, color: '#6b7280' }], margin: [0, 3, 0, 3] }})
+              ? items_data.map(p => ({ stack: [{ text: p.place, bold: true, fontSize: 10 }, { text: p.description || '', fontSize: 9, color: '#6b7280' }], margin: [0, 3, 0, 3] }))
               : [{ text: typeof items_data === 'string' ? items_data : items_data.area || '', fontSize: 10, color: '#374151' }]
 
             items.push({
