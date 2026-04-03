@@ -62,24 +62,34 @@ function buildPrompt(destination, days, hasCar, intensity, preferences, starting
   const startText = startingAddress ? `\n- Punto de partida: ${startingAddress}` : ''
   const filtersText = strictFilters.length ? '\nREQUISITOS:\n' + strictFilters.map(f => `- ${f}`).join('\n') : ''
 
-  return `Eres un experto en turismo por España. Genera un itinerario realista y optimizado geográficamente.
+  // Force variety across days
+  const dayCount = parseInt(days)
+  const dayHints = Array.from({ length: dayCount }, (_, i) => `- Día ${i + 1}: zona/barrio/comarca DISTINTA a todos los demás días`).join('\n')
 
-PARÁMETROS:
-- Destino: ${destination}${startText}
-- Días: ${days}
-- Viaja en coche: ${carText}
-- Intensidad: ${intensity}
-- Prioridad ${priorityText}${filtersText}
+  return `Eres un experto en turismo por España con conocimiento profundo de todas sus regiones, ciudades y pueblos.
 
-REGLAS IMPORTANTES:
-- transport_mode debe ser "walking" si la distancia es <2km, o "driving" si >2km
-- Usa nombres REALES y específicos de restaurantes (no "Restaurante del centro")
-- price_range: solo "alto", "medio" o "bajo" (minúsculas)
-- coordinates: lat/lng reales y precisas de cada lugar
-- Para pueblos pequeños amplía el radio a 20-30km si hace falta
-- total_km y total_time deben ser valores realistas
+Genera un itinerario de ${days} días para: ${destination}${startText}
+Coche: ${carText} | Intensidad: ${intensity} | Prioridad ${priorityText}${filtersText}
 
-Devuelve SOLO el siguiente JSON válido, sin texto antes ni después:
+⚠️ REGLA CRÍTICA — CADA DÍA DEBE SER COMPLETAMENTE DIFERENTE:
+- NUNCA repitas el mismo lugar, zona, barrio o monumento en distintos días
+- Cada día tiene su propia "zone" (barrio, pueblo o comarca distinta)
+- Distribuye inteligentemente: ciudad grande → barrios distintos; región → pueblos/zonas distintas
+- Ejemplo Galicia: Día 1 Santiago de Compostela casco histórico, Día 2 Rías Baixas (Cambados/O Grove), Día 3 Costa da Morte (Muxía/Fisterra)
+- Ejemplo Madrid: Día 1 Centro/Sol/Mayor, Día 2 excursión Toledo o Segovia, Día 3 Retiro/Salamanca
+
+Distribución de zonas OBLIGATORIA para este viaje:
+${dayHints}
+
+REGLAS TÉCNICAS:
+- transport_mode: "walking" <2km, "driving" >2km
+- Nombres REALES de lugares y restaurantes (nunca genéricos como "restaurante local")
+- price_range: exactamente "alto", "medio" o "bajo"
+- coordinates: lat/lng reales y precisas
+- Mínimo 2 lugares mañana, 2 tarde, 1 zona noche con restaurantes
+- total_km y total_time realistas
+
+Devuelve ÚNICAMENTE el JSON con ${days} días completos, sin texto antes ni después:
 
 {
   "destination": "${destination}",
