@@ -14,7 +14,7 @@ function getMockForCity(destination, days, intensity) {
       total_time: '8h',
       plan: {
         morning: [
-          { place: `Lugar turístico 1 - Día ${i+1}`, description: 'Configura GEMINI_API_KEY para obtener lugares reales', distance_km: 0, time_estimated: '2h0m', transport_mode: 'walking', coordinates: { lat: 40.0, lng: -3.5 } },
+          { place: `Lugar turístico 1 - Día ${i+1}`, description: 'Configura GROQ_API_KEY para obtener lugares reales', distance_km: 0, time_estimated: '2h0m', transport_mode: 'walking', coordinates: { lat: 40.0, lng: -3.5 } },
         ],
         lunch: {
           area: `Zona de restaurantes`,
@@ -27,7 +27,7 @@ function getMockForCity(destination, days, intensity) {
           ]
         },
         afternoon: [
-          { place: `Lugar turístico tarde - Día ${i+1}`, description: 'Configura GEMINI_API_KEY para obtener lugares reales', distance_km: 1.0, time_estimated: '2h0m', transport_mode: 'walking', coordinates: { lat: 40.02, lng: -3.52 } }
+          { place: `Lugar turístico tarde - Día ${i+1}`, description: 'Configura GROQ_API_KEY para obtener lugares reales', distance_km: 1.0, time_estimated: '2h0m', transport_mode: 'walking', coordinates: { lat: 40.02, lng: -3.52 } }
         ],
         evening: [
           { place: `Zona nocturna`, description: 'Ambiente local', distance_km: 0.8, time_estimated: '2h0m', transport_mode: 'walking', coordinates: { lat: 40.03, lng: -3.53 },
@@ -176,33 +176,39 @@ Responde ÚNICAMENTE con este JSON (sin texto antes ni después):
 }
 
 // ─── Call Gemini ──────────────────────────────────────────────────────────────
-async function callGemini(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error('GEMINI_API_KEY no configurada')
+async function callGroq(prompt) {
+  const apiKey = process.env.GROQ_API_KEY
+  if (!apiKey) throw new Error('GROQ_API_KEY no configurada')
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
-
-  const res = await fetch(url, {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 4096,
-        responseMimeType: 'application/json',
-      },
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: 'Eres un experto guia de viajes por Espana. Responde UNICAMENTE con JSON valido, sin texto antes ni despues, sin markdown.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 4096,
+      response_format: { type: 'json_object' },
     }),
   })
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(`Gemini error ${res.status}: ${err?.error?.message || 'Error desconocido'}`)
+    throw new Error(`Groq error ${res.status}: ${err?.error?.message || 'Error desconocido'}`)
   }
 
   const data = await res.json()
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) throw new Error('Gemini no devolvió contenido')
+  const text = data?.choices?.[0]?.message?.content
+  if (!text) throw new Error('Groq no devolvio contenido')
 
   const clean = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
   return JSON.parse(clean)
@@ -229,7 +235,7 @@ async function generateAllDays(destination, days, hasCar, intensity, preferences
       usedZones: [...usedZones],
     })
 
-    const dayData = await callGemini(prompt)
+    const dayData = await callGroq(prompt)
 
     // Track used places and zones to avoid repetition next day
     if (dayData.zone) usedZones.push(dayData.zone)
@@ -254,7 +260,7 @@ async function generateAllDays(destination, days, hasCar, intensity, preferences
 export async function GET() {
   return NextResponse.json({
     message: 'RutaEficiente API — POST /api/generate',
-    gemini: process.env.GEMINI_API_KEY ? 'configurada ✓' : 'no configurada (modo demo)',
+    gemini: process.env.GROQ_API_KEY ? 'configurada ✓' : 'no configurada (modo demo)',
     status: 'ok',
   })
 }
@@ -274,7 +280,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'El número de días debe ser entre 2 y 5' }, { status: 400 })
     }
 
-    if (process.env.GEMINI_API_KEY) {
+    if (process.env.GROQ_API_KEY) {
       try {
         console.log(`[Gemini] ${finalDestination} · ${days} días · ${intensity} — generando día a día`)
         const itinerary = await generateAllDays(
@@ -293,7 +299,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       ...getMockForCity(finalDestination, days, intensity),
-      _note: 'Modo demo — configura GEMINI_API_KEY para itinerarios reales',
+      _note: 'Modo demo — configura GROQ_API_KEY para itinerarios reales',
     })
 
   } catch (error) {
