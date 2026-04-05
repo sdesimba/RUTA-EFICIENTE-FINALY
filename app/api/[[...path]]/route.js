@@ -208,7 +208,7 @@ async function callGroq(prompt) {
 
   const data = await res.json()
   const text = data?.choices?.[0]?.message?.content
-  if (!text) throw new Error('Groq no devolvio contenido')
+  console.log('[Groq] respuesta:', text?.substring(0,200)); if (!text) throw new Error('Groq no devolvio contenido')
 
   const clean = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
   return JSON.parse(clean)
