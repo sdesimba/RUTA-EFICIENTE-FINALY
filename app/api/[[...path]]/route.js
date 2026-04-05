@@ -1,44 +1,47 @@
 import { NextResponse } from 'next/server'
 
 /**
- * PROMPT OPTIMIZADO (IA SOLO PROPONE LUGARES)
+ * PROMPT OPTIMIZADO
  */
 function buildPrompt(destination, days, hasCar, intensity, preferences) {
   const car = hasCar === 'si' ? 'con coche' : 'sin coche'
-  const priority = preferences?.priority || 'cultura'
 
   return `
-Planifica un viaje de ${days} dias en ${destination}, ${car}, intensidad ${intensity}, prioridad ${priority}.
+Devuelve un itinerario de viaje en JSON válido.
 
-REGLAS IMPORTANTES:
-- NO inventes coordenadas
-- SOLO devuelve nombres de lugares reales
-- NO incluyas rutas ni distancias
-- Agrupa por zonas (cada dia en una zona distinta)
-- Maximo 3-4 lugares por dia
-- Incluye zona recomendada para comer
+Destino: ${destination}
+Días: ${days}
+${car}
+Intensidad: ${intensity}
 
-Formato JSON obligatorio:
+Reglas:
+- Usa lugares reales
+- No inventes coordenadas
+- Máximo 4 lugares por día
+- Cada día en una zona distinta
+
+Formato:
 
 {
   "destination": "${destination}",
   "days": [
     {
       "day": 1,
-      "zone": "nombre zona real",
+      "zone": "zona real",
       "places": [
-        { "name": "lugar real", "type": "turismo" },
         { "name": "lugar real", "type": "turismo" }
       ],
-      "food_area": "zona recomendada para comer"
+      "food_area": "zona para comer"
     }
   ]
 }
+
+No añadas texto fuera del JSON.
 `
 }
 
 /**
- * LLAMADA A GROQ
+ * LLAMADA A GROQ (ROBUSTA)
  */
 async function callGroq(prompt) {
   const apiKey = process.env.GROQ_API_KEY
@@ -51,16 +54,17 @@ async function callGroq(prompt) {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.1-70b-versatile', // 🔥 mejor que el 8b
+      model: 'llama-3.1-70b-versatile',
       messages: [
         {
           role: 'system',
-          content: 'Eres un experto en viajes. Devuelves SOLO JSON valido.'
+          content: 'Eres un experto en viajes. Devuelves SOLO JSON válido.'
         },
         { role: 'user', content: prompt }
       ],
       temperature: 0.3,
       max_tokens: 2000,
+      response_format: { type: 'json_object' }
     }),
   })
 
@@ -70,25 +74,35 @@ async function callGroq(prompt) {
   }
 
   const data = await res.json()
-  const text = data?.choices?.[0]?.message?.content
+  let text = data?.choices?.[0]?.message?.content
 
   if (!text) throw new Error('Sin respuesta de IA')
+
+  // 🔥 limpiar markdown
+  text = text
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim()
 
   try {
     return JSON.parse(text)
   } catch (e) {
-    console.error('JSON inválido:', text)
-    throw new Error('La IA devolvió JSON inválido')
+    console.error('Respuesta IA cruda:', text)
+    throw new Error('JSON inválido')
   }
 }
 
 /**
- * ENRIQUECIMIENTO BÁSICO (TU LÓGICA)
+ * ENRIQUECIMIENTO (TU LÓGICA)
  */
 function enrichItinerary(data) {
+  if (!data.days || !Array.isArray(data.days)) {
+    throw new Error('Estructura IA incorrecta')
+  }
+
   return {
     ...data,
-    days: data.days.map((day, i) => ({
+    days: data.days.map((day) => ({
       ...day,
       total_time: '6-8h',
       plan: {
@@ -96,7 +110,7 @@ function enrichItinerary(data) {
         afternoon: day.places.slice(2),
         lunch: {
           area: day.food_area,
-          suggestion: 'Comida local',
+          suggestion: 'Comida local típica'
         }
       }
     }))
@@ -104,7 +118,7 @@ function enrichItinerary(data) {
 }
 
 /**
- * API GET
+ * GET
  */
 export async function GET() {
   return NextResponse.json({
@@ -114,7 +128,7 @@ export async function GET() {
 }
 
 /**
- * API POST
+ * POST
  */
 export async function POST(request) {
   try {
@@ -127,15 +141,17 @@ export async function POST(request) {
 
     if (!process.env.GROQ_API_KEY) {
       return NextResponse.json({
-        error: 'Configura GROQ_API_KEY',
+        error: 'Configura GROQ_API_KEY'
       }, { status: 500 })
     }
+
+    console.log(`[IA] Generando viaje a ${destination}`)
 
     // 1. IA genera estructura
     const prompt = buildPrompt(destination, days, hasCar, intensity, preferences || {})
     const rawData = await callGroq(prompt)
 
-    // 2. TU SISTEMA ORGANIZA
+    // 2. TU BACKEND ORGANIZA
     const itinerary = enrichItinerary(rawData)
 
     return NextResponse.json(itinerary)
@@ -148,4 +164,12 @@ export async function POST(request) {
       details: error.message
     }, { status: 500 })
   }
+}
+
+export async function PUT() {
+  return NextResponse.json({ error: 'No permitido' }, { status: 405 })
+}
+
+export async function DELETE() {
+  return NextResponse.json({ error: 'No permitido' }, { status: 405 })
 }
