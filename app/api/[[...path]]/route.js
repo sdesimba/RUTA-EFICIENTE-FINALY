@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 
-// ─── Mock fallback ────────────────────────────────────────────────────────────
 function getMockForCity(destination, days, intensity) {
   const kmPerDay = intensity === 'atope' ? 180 : intensity === 'relax' ? 90 : 130
   return {
@@ -14,27 +13,25 @@ function getMockForCity(destination, days, intensity) {
       total_time: '8h',
       plan: {
         morning: [
-          { place: `Lugar turístico 1 - Día ${i+1}`, description: 'Configura GROQ_API_KEY para obtener lugares reales', distance_km: 0, time_estimated: '2h0m', transport_mode: 'walking', coordinates: { lat: 40.0, lng: -3.5 } },
+          { place: `Monumento principal día ${i+1}`, description: 'Configura GROQ_API_KEY para obtener lugares reales', distance_km: 0, time_estimated: '2h', transport_mode: 'walking', coordinates: { lat: 40.0, lng: -3.5 } },
         ],
         lunch: {
-          area: `Zona de restaurantes`,
-          suggestion: 'Gastronomía local',
-          time_estimated: '1h30m', transport_mode: 'walking', coordinates: { lat: 40.01, lng: -3.51 },
+          area: `Zona restaurantes`, suggestion: 'Gastronomía local', time_estimated: '1h30m', transport_mode: 'walking', coordinates: { lat: 40.01, lng: -3.51 },
           restaurants: [
-            { name: `Restaurante caro`, price_range: 'alto', coordinates: { lat: 40.01, lng: -3.51 } },
-            { name: `Restaurante medio`, price_range: 'medio', coordinates: { lat: 40.011, lng: -3.511 } },
-            { name: `Restaurante barato`, price_range: 'bajo', coordinates: { lat: 40.012, lng: -3.512 } }
+            { name: 'Restaurante caro', price_range: 'alto', coordinates: { lat: 40.01, lng: -3.51 } },
+            { name: 'Restaurante medio', price_range: 'medio', coordinates: { lat: 40.011, lng: -3.511 } },
+            { name: 'Restaurante barato', price_range: 'bajo', coordinates: { lat: 40.012, lng: -3.512 } }
           ]
         },
         afternoon: [
-          { place: `Lugar turístico tarde - Día ${i+1}`, description: 'Configura GROQ_API_KEY para obtener lugares reales', distance_km: 1.0, time_estimated: '2h0m', transport_mode: 'walking', coordinates: { lat: 40.02, lng: -3.52 } }
+          { place: `Lugar tarde día ${i+1}`, description: 'Configura GROQ_API_KEY para obtener lugares reales', distance_km: 1.0, time_estimated: '2h', transport_mode: 'walking', coordinates: { lat: 40.02, lng: -3.52 } }
         ],
         evening: [
-          { place: `Zona nocturna`, description: 'Ambiente local', distance_km: 0.8, time_estimated: '2h0m', transport_mode: 'walking', coordinates: { lat: 40.03, lng: -3.53 },
+          { place: `Zona nocturna`, description: 'Ambiente local', distance_km: 0.8, time_estimated: '2h', transport_mode: 'walking', coordinates: { lat: 40.03, lng: -3.53 },
             restaurants: [
-              { name: `Cena cara`, price_range: 'alto', coordinates: { lat: 40.03, lng: -3.53 } },
-              { name: `Cena media`, price_range: 'medio', coordinates: { lat: 40.031, lng: -3.531 } },
-              { name: `Cena barata`, price_range: 'bajo', coordinates: { lat: 40.032, lng: -3.532 } }
+              { name: 'Cena cara', price_range: 'alto', coordinates: { lat: 40.03, lng: -3.53 } },
+              { name: 'Cena media', price_range: 'medio', coordinates: { lat: 40.031, lng: -3.531 } },
+              { name: 'Cena barata', price_range: 'bajo', coordinates: { lat: 40.032, lng: -3.532 } }
             ]
           }
         ]
@@ -43,139 +40,32 @@ function getMockForCity(destination, days, intensity) {
   }
 }
 
-// ─── Build prompt for ONE day ─────────────────────────────────────────────────
-function buildDayPrompt({ destination, dayNumber, totalDays, hasCar, intensity, preferences, startingAddress, usedPlaces, usedZones }) {
-  const carText = hasCar === 'si' ? 'sí, tiene coche' : 'no, va a pie o transporte público'
-  
-  const priorityMap = {
-    natural: 'naturaleza (senderismo, miradores, playas, parques)',
-    gastronomica: 'gastronomía (mercados, bodegas, restaurantes típicos)',
-    cultural: 'cultura (museos, catedrales, barrios históricos, monumentos)',
-  }
-  const priority = priorityMap[preferences?.priority] || priorityMap.cultural
-
+function buildPrompt(destination, days, hasCar, intensity, preferences, startingAddress) {
+  const car = hasCar === 'si' ? 'con coche' : 'sin coche'
+  const priority = { natural: 'naturaleza', gastronomica: 'gastronomia', cultural: 'cultura' }[preferences?.priority] || 'cultura'
   const filters = []
-  if (preferences?.with_dogs) filters.push('los viajeros van con perros — solo lugares pet-friendly')
-  if (preferences?.with_children) filters.push('van con niños — actividades cortas y seguras para familias')
-  if (preferences?.with_elderly) filters.push('van personas mayores — lugares accesibles, poco caminar')
-  if (preferences?.with_couple) filters.push('viajan en pareja — planes románticos, miradores, cenas íntimas')
-  if (preferences?.with_friends) filters.push('viajan amigos — planes dinámicos, bares, experiencias en grupo')
-  const filtersText = filters.length ? '\nCONDICIONES ESPECIALES:\n' + filters.map(f => `- ${f}`).join('\n') : ''
+  if (preferences?.with_dogs) filters.push('pet-friendly')
+  if (preferences?.with_children) filters.push('apto ninos')
+  if (preferences?.with_elderly) filters.push('accesible mayores')
+  if (preferences?.with_couple) filters.push('romantico pareja')
+  if (preferences?.with_friends) filters.push('grupo amigos')
+  const filterText = filters.length ? ` Requisitos: ${filters.join(', ')}.` : ''
+  const startText = startingAddress ? ` Inicio: ${startingAddress}.` : ''
 
-  const usedPlacesText = usedPlaces.length > 0
-    ? `\nLUGARES YA VISITADOS EN DÍAS ANTERIORES (NO REPETIR NINGUNO):\n${usedPlaces.map(p => `- ${p}`).join('\n')}`
-    : ''
+  return `Planifica ${days} dias en ${destination}, ${car}, intensidad ${intensity}, prioridad ${priority}.${startText}${filterText}
 
-  const usedZonesText = usedZones.length > 0
-    ? `\nZONAS YA USADAS (usa una zona/barrio/área DIFERENTE hoy):\n${usedZones.map(z => `- ${z}`).join('\n')}`
-    : ''
+REGLAS:
+- Cada dia en zona/barrio DIFERENTE, nunca repetir lugares
+- Lugares turisticos REALES con nombres exactos
+- Ordenar por cercania geografica
+- 3 restaurantes reales por comida y cena (alto/medio/bajo precio)
+- coordinates reales y precisas
+- transport_mode: walking<2km, driving>2km
 
-  const startText = startingAddress ? `\nPunto de inicio del viajero: ${startingAddress}` : ''
-  
-  const intensityGuide = {
-    relax: '2 lugares mañana + 1-2 tarde (ritmo tranquilo, con descansos)',
-    equilibrado: '2-3 lugares mañana + 2 tarde (buen ritmo sin agobiar)',
-    atope: '3 lugares mañana + 3 tarde (máximo aprovechamiento del día)',
-  }
-  const intensityText = intensityGuide[intensity] || intensityGuide.equilibrado
-
-  return `Eres un experto guía de viajes por España. Conoces perfectamente todos los pueblos, ciudades, monumentos, restaurantes y zonas turísticas del país.
-
-TAREA: Planifica el DÍA ${dayNumber} de ${totalDays} de una escapada a ${destination}.${startText}
-Coche disponible: ${carText}
-Intensidad: ${intensity} — ${intensityText}
-Prioridad: ${priority}${filtersText}
-${usedPlacesText}
-${usedZonesText}
-
-INSTRUCCIONES OBLIGATORIAS:
-1. Elige una zona/barrio/área DIFERENTE a las ya usadas para este día
-2. Selecciona lugares turísticos REALES y ESPECÍFICOS (nombres exactos, no genéricos)
-3. Ordena los lugares por CERCANÍA geográfica para minimizar desplazamientos
-4. Si tienen coche, puedes incluir lugares a 20-40km; si no, máximo 3km entre lugares
-5. Para comida y cena: da exactamente 3 restaurantes REALES con nombre específico:
-   - 1 restaurante de precio alto (€€€): cocina elaborada, con carta extensa
-   - 1 restaurante de precio medio (€€): buena relación calidad-precio
-   - 1 restaurante de precio bajo (€): económico, tapas, menú del día
-6. Las coordenadas lat/lng deben ser REALES y precisas del lugar exacto
-7. transport_mode: "walking" si menos de 2km, "driving" si más de 2km
-
-Responde ÚNICAMENTE con este JSON (sin texto antes ni después):
-{
-  "day": ${dayNumber},
-  "zone": "Nombre específico del barrio/zona/pueblo del día",
-  "total_km": 25,
-  "total_time": "8h",
-  "google_maps_url": "https://www.google.com/maps/dir/?api=1&origin=PrimerLugar,${destination},España&destination=UltimoLugar,${destination},España&waypoints=Lugar2|Lugar3&travelmode=walking",
-  "plan": {
-    "morning": [
-      {
-        "place": "Nombre real y específico del lugar",
-        "description": "Qué se puede ver/hacer aquí exactamente (1-2 frases concretas)",
-        "distance_km": 0,
-        "time_estimated": "1h30m",
-        "transport_mode": "walking",
-        "coordinates": {"lat": 42.8805, "lng": -8.5457}
-      },
-      {
-        "place": "Nombre real segundo lugar mañana",
-        "description": "Qué se puede ver/hacer aquí exactamente",
-        "distance_km": 0.8,
-        "time_estimated": "1h0m",
-        "transport_mode": "walking",
-        "coordinates": {"lat": 42.8810, "lng": -8.5460}
-      }
-    ],
-    "lunch": {
-      "area": "Nombre real de la calle, plaza o barrio para comer",
-      "suggestion": "Plato típico concreto de la zona que deben probar",
-      "time_estimated": "1h30m",
-      "transport_mode": "walking",
-      "coordinates": {"lat": 42.8800, "lng": -8.5450},
-      "restaurants": [
-        {"name": "Nombre real restaurante caro", "price_range": "alto", "coordinates": {"lat": 42.8800, "lng": -8.5450}},
-        {"name": "Nombre real restaurante medio", "price_range": "medio", "coordinates": {"lat": 42.8801, "lng": -8.5451}},
-        {"name": "Nombre real restaurante barato", "price_range": "bajo", "coordinates": {"lat": 42.8802, "lng": -8.5452}}
-      ]
-    },
-    "afternoon": [
-      {
-        "place": "Nombre real primer lugar tarde",
-        "description": "Qué se puede ver/hacer exactamente",
-        "distance_km": 1.5,
-        "time_estimated": "2h0m",
-        "transport_mode": "walking",
-        "coordinates": {"lat": 42.8815, "lng": -8.5465}
-      },
-      {
-        "place": "Nombre real segundo lugar tarde",
-        "description": "Qué se puede ver/hacer exactamente",
-        "distance_km": 0.5,
-        "time_estimated": "1h0m",
-        "transport_mode": "walking",
-        "coordinates": {"lat": 42.8820, "lng": -8.5470}
-      }
-    ],
-    "evening": [
-      {
-        "place": "Nombre real zona para cenar/ambiente nocturno",
-        "description": "Qué hacer por la noche aquí exactamente",
-        "distance_km": 1.0,
-        "time_estimated": "2h30m",
-        "transport_mode": "walking",
-        "coordinates": {"lat": 42.8825, "lng": -8.5475},
-        "restaurants": [
-          {"name": "Nombre real restaurante cena caro", "price_range": "alto", "coordinates": {"lat": 42.8825, "lng": -8.5475}},
-          {"name": "Nombre real restaurante cena medio", "price_range": "medio", "coordinates": {"lat": 42.8826, "lng": -8.5476}},
-          {"name": "Nombre real restaurante cena barato", "price_range": "bajo", "coordinates": {"lat": 42.8827, "lng": -8.5477}}
-        ]
-      }
-    ]
-  }
-}`
+Responde SOLO con este JSON (sin texto extra):
+{"destination":"${destination}","total_km":0,"total_time":"0h","days":[{"day":1,"zone":"zona dia 1","total_km":0,"total_time":"8h","google_maps_url":"https://www.google.com/maps/dir/?api=1&origin=Lugar1,${destination}&destination=UltimoLugar,${destination}&travelmode=walking","plan":{"morning":[{"place":"nombre lugar real","description":"que ver aqui","distance_km":0,"time_estimated":"1h30m","transport_mode":"walking","coordinates":{"lat":0.0,"lng":0.0}},{"place":"nombre lugar real 2","description":"que ver aqui","distance_km":0.5,"time_estimated":"1h","transport_mode":"walking","coordinates":{"lat":0.0,"lng":0.0}}],"lunch":{"area":"zona real comer","suggestion":"plato tipico","time_estimated":"1h30m","transport_mode":"walking","coordinates":{"lat":0.0,"lng":0.0},"restaurants":[{"name":"restaurante real caro","price_range":"alto","coordinates":{"lat":0.0,"lng":0.0}},{"name":"restaurante real medio","price_range":"medio","coordinates":{"lat":0.0,"lng":0.0}},{"name":"restaurante real barato","price_range":"bajo","coordinates":{"lat":0.0,"lng":0.0}}]},"afternoon":[{"place":"lugar real tarde","description":"que ver","distance_km":1.0,"time_estimated":"2h","transport_mode":"walking","coordinates":{"lat":0.0,"lng":0.0}},{"place":"lugar real tarde 2","description":"que ver","distance_km":0.5,"time_estimated":"1h","transport_mode":"walking","coordinates":{"lat":0.0,"lng":0.0}}],"evening":[{"place":"zona nocturna real","description":"que hacer noche","distance_km":0.5,"time_estimated":"2h","transport_mode":"walking","coordinates":{"lat":0.0,"lng":0.0},"restaurants":[{"name":"cena real cara","price_range":"alto","coordinates":{"lat":0.0,"lng":0.0}},{"name":"cena real media","price_range":"medio","coordinates":{"lat":0.0,"lng":0.0}},{"name":"cena real barata","price_range":"bajo","coordinates":{"lat":0.0,"lng":0.0}}]}]}}]}`
 }
 
-// ─── Call Gemini ──────────────────────────────────────────────────────────────
 async function callGroq(prompt) {
   const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) throw new Error('GROQ_API_KEY no configurada')
@@ -189,78 +79,31 @@ async function callGroq(prompt) {
     body: JSON.stringify({
       model: 'llama-3.1-8b-instant',
       messages: [
-        {
-          role: 'system',
-          content: 'Eres un experto guia de viajes por Espana. Responde UNICAMENTE con JSON valido, sin texto antes ni despues, sin markdown.'
-        },
+        { role: 'system', content: 'Eres un experto en turismo por Espana. Respondes UNICAMENTE con JSON valido y completo, sin texto adicional.' },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.8,
-      max_tokens: 4096,
+      temperature: 0.7,
+      max_tokens: 6000,
       response_format: { type: 'json_object' },
     }),
   })
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(`Groq error ${res.status}: ${err?.error?.message || 'Error desconocido'}`)
+    throw new Error(`Groq error ${res.status}: ${err?.error?.message || 'Error'}`)
   }
 
   const data = await res.json()
   const text = data?.choices?.[0]?.message?.content
-  console.log('[Groq] respuesta:', text?.substring(0,200)); if (!text) throw new Error('Groq no devolvio contenido')
-
+  if (!text) throw new Error('Groq no devolvio contenido')
   const clean = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
   return JSON.parse(clean)
 }
 
-// ─── Generate all days sequentially ──────────────────────────────────────────
-async function generateAllDays(destination, days, hasCar, intensity, preferences, startingAddress) {
-  const daysNum = parseInt(days)
-  const generatedDays = []
-  const usedPlaces = []
-  const usedZones = []
-  let totalKm = 0
-
-  for (let dayNumber = 1; dayNumber <= daysNum; dayNumber++) {
-    const prompt = buildDayPrompt({
-      destination,
-      dayNumber,
-      totalDays: daysNum,
-      hasCar,
-      intensity,
-      preferences,
-      startingAddress,
-      usedPlaces: [...usedPlaces],
-      usedZones: [...usedZones],
-    })
-
-    const dayData = await callGroq(prompt)
-
-    // Track used places and zones to avoid repetition next day
-    if (dayData.zone) usedZones.push(dayData.zone)
-    const plan = dayData.plan || {}
-    if (Array.isArray(plan.morning)) plan.morning.forEach(p => { if (p.place) usedPlaces.push(p.place) })
-    if (Array.isArray(plan.afternoon)) plan.afternoon.forEach(p => { if (p.place) usedPlaces.push(p.place) })
-    if (Array.isArray(plan.evening)) plan.evening.forEach(p => { if (p.place) usedPlaces.push(p.place) })
-
-    totalKm += dayData.total_km || 0
-    generatedDays.push(dayData)
-  }
-
-  return {
-    destination,
-    total_km: totalKm,
-    total_time: `${daysNum * 8}h`,
-    days: generatedDays,
-  }
-}
-
-// ─── Handlers ─────────────────────────────────────────────────────────────────
 export async function GET() {
   return NextResponse.json({
-    message: 'RutaEficiente API — POST /api/generate',
-    gemini: process.env.GROQ_API_KEY ? 'configurada ✓' : 'no configurada (modo demo)',
+    message: 'RutaEficiente API',
+    groq: process.env.GROQ_API_KEY ? 'configurada ✓' : 'no configurada (modo demo)',
     status: 'ok',
   })
 }
@@ -272,41 +115,38 @@ export async function POST(request) {
     const finalDestination = (destination || city || '').trim()
 
     if (!finalDestination || !days) {
-      return NextResponse.json({ error: 'Faltan campos: destination y days son obligatorios' }, { status: 400 })
+      return NextResponse.json({ error: 'Faltan destination y days' }, { status: 400 })
     }
-
     const daysNum = parseInt(days)
     if (isNaN(daysNum) || daysNum < 2 || daysNum > 5) {
-      return NextResponse.json({ error: 'El número de días debe ser entre 2 y 5' }, { status: 400 })
+      return NextResponse.json({ error: 'Dias debe ser entre 2 y 5' }, { status: 400 })
     }
 
     if (process.env.GROQ_API_KEY) {
       try {
-        console.log(`[Gemini] ${finalDestination} · ${days} días · ${intensity} — generando día a día`)
-        const itinerary = await generateAllDays(
-          finalDestination, days, hasCar, intensity,
-          preferences || {}, starting_address || ''
-        )
+        console.log(`[Groq] ${finalDestination} ${days} dias`)
+        const prompt = buildPrompt(finalDestination, days, hasCar, intensity, preferences || {}, starting_address || '')
+        const itinerary = await callGroq(prompt)
         return NextResponse.json(itinerary)
       } catch (err) {
-        console.error('[Gemini] Error:', err.message)
+        console.error('[Groq] Error:', err.message)
         return NextResponse.json({
           ...getMockForCity(finalDestination, days, intensity),
-          _note: 'Error generando con IA, mostrando datos de ejemplo',
+          _note: `Error: ${err.message}`,
         })
       }
     }
 
     return NextResponse.json({
       ...getMockForCity(finalDestination, days, intensity),
-      _note: 'Modo demo — configura GROQ_API_KEY para itinerarios reales',
+      _note: 'Modo demo - configura GROQ_API_KEY',
     })
 
   } catch (error) {
-    console.error('[API] Error interno:', error)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    console.error('[API] Error:', error)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
 
-export async function PUT() { return NextResponse.json({ error: 'Método no permitido' }, { status: 405 }) }
-export async function DELETE() { return NextResponse.json({ error: 'Método no permitido' }, { status: 405 }) }
+export async function PUT() { return NextResponse.json({ error: 'No permitido' }, { status: 405 }) }
+export async function DELETE() { return NextResponse.json({ error: 'No permitido' }, { status: 405 }) }
