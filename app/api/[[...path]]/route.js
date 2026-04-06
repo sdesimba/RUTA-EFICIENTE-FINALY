@@ -58,11 +58,11 @@ async function callGroq(prompt) {
       messages: [
         {
           role: 'system',
-          content: 'Devuelve SOLO un JSON válido. Sin texto adicional.'
+          content: 'Devuelve SOLO JSON válido. Sin explicaciones.'
         },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.2,
+      temperature: 0.1,
       max_tokens: 2000,
     }),
   })
@@ -77,28 +77,35 @@ async function callGroq(prompt) {
 
   if (!text) throw new Error('Sin respuesta de IA')
 
-  // 🔥 LIMPIEZA PRO
-  text = text.trim()
+  console.log('RAW IA:', text)
 
-  // quitar markdown
-  text = text.replace(/```json/gi, '').replace(/```/g, '').trim()
+  // 🔥 LIMPIEZA NIVEL DIOS
+  text = text
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .replace(/\n/g, ' ')
+    .trim()
 
-  // 🔥 EXTRAER SOLO EL JSON (CLAVE)
-  const firstBrace = text.indexOf('{')
-  const lastBrace = text.lastIndexOf('}')
+  // 🔥 EXTRAER JSON REAL
+  const match = text.match(/\{[\s\S]*\}/)
 
-  if (firstBrace === -1 || lastBrace === -1) {
-    console.error('Respuesta IA rara:', text)
-    throw new Error('No se encontró JSON válido')
+  if (!match) {
+    console.error('No hay JSON en respuesta:', text)
+    throw new Error('No se encontró JSON')
   }
 
-  const jsonString = text.substring(firstBrace, lastBrace + 1)
+  let jsonString = match[0]
+
+  // 🔥 ARREGLAR COMILLAS MAL FORMADAS (muy común)
+  jsonString = jsonString
+    .replace(/(\w+):/g, '"$1":') // claves sin comillas → con comillas
+    .replace(/'/g, '"') // comillas simples → dobles
 
   try {
     return JSON.parse(jsonString)
   } catch (e) {
-    console.error('JSON limpio falló:', jsonString)
-    throw new Error('JSON inválido tras limpieza')
+    console.error('JSON final falló:', jsonString)
+    throw new Error('JSON inválido incluso tras limpieza')
   }
 }
 
