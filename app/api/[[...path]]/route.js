@@ -58,13 +58,12 @@ async function callGroq(prompt) {
       messages: [
         {
           role: 'system',
-          content: 'Eres un experto en viajes. Devuelves SOLO JSON válido.'
+          content: 'Devuelve SOLO un JSON válido. Sin texto adicional.'
         },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.3,
+      temperature: 0.2,
       max_tokens: 2000,
-      response_format: { type: 'json_object' }
     }),
   })
 
@@ -78,17 +77,28 @@ async function callGroq(prompt) {
 
   if (!text) throw new Error('Sin respuesta de IA')
 
-  // 🔥 limpiar markdown
-  text = text
-    .replace(/```json/gi, '')
-    .replace(/```/g, '')
-    .trim()
+  // 🔥 LIMPIEZA PRO
+  text = text.trim()
+
+  // quitar markdown
+  text = text.replace(/```json/gi, '').replace(/```/g, '').trim()
+
+  // 🔥 EXTRAER SOLO EL JSON (CLAVE)
+  const firstBrace = text.indexOf('{')
+  const lastBrace = text.lastIndexOf('}')
+
+  if (firstBrace === -1 || lastBrace === -1) {
+    console.error('Respuesta IA rara:', text)
+    throw new Error('No se encontró JSON válido')
+  }
+
+  const jsonString = text.substring(firstBrace, lastBrace + 1)
 
   try {
-    return JSON.parse(text)
+    return JSON.parse(jsonString)
   } catch (e) {
-    console.error('Respuesta IA cruda:', text)
-    throw new Error('JSON inválido')
+    console.error('JSON limpio falló:', jsonString)
+    throw new Error('JSON inválido tras limpieza')
   }
 }
 
